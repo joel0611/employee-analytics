@@ -10,7 +10,7 @@ const app = express();
 const PORT = 3001;
 
 // ─────────────────────────────────────────────────────────────
-// 🔑  Gemini API Key
+//   Gemini API Key
 // ─────────────────────────────────────────────────────────────
 const GEMINI_API_KEY = 'AIzaSyB1xGrQbh4wmRyTbg2cj2kr7tqWek_5yRY';
 const GEMINI_MODEL  = 'gemini-2.0-flash';
@@ -41,7 +41,7 @@ function extractJSON(text, kind = 'object') {
 }
 
 // ──────────────────────────────────────────────────────────────
-// ⚙️  RULE-BASED SKILL GAP ENGINE
+//   RULE-BASED SKILL GAP ENGINE
 // ──────────────────────────────────────────────────────────────
 
 // Canonical skill aliases (normalise input)
@@ -525,7 +525,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 Employee Analytics Server running at http://localhost:${PORT}\n`);
+  console.log(`\nEmployee Analytics Server running at http://localhost:${PORT}\n`);
   console.log(`   Gemini: ${GEMINI_MODEL} (sample size: ${GEMINI_SAMPLE_SIZE} employees)`);
   console.log(`   Skill gaps & course recommendations: rule-based engine\n`);
 });
