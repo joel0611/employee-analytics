@@ -31,6 +31,7 @@ GEMINI_MODEL     = "gemini-2.0-flash"
 GEMINI_SAMPLE    = 5          # max employees sent to Gemini per call
 PORT             = 3001
 PUBLIC_DIR       = Path(__file__).parent / "public"
+DEFAULT_CSV      = Path(__file__).parent / "employee_dataset_v2.csv"
 
 genai_client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -346,6 +347,52 @@ def heuristic_validate(name: str, address: str) -> dict:
 # ──────────────────────────────────────────────────────────────
 # Routes
 # ──────────────────────────────────────────────────────────────
+
+@app.get("/api/load-default")
+async def load_default():
+    if not DEFAULT_CSV.exists():
+        raise HTTPException(404, "Default dataset (employee_dataset_v2.csv) not found in project folder.")
+
+    try:
+        df = pd.read_csv(str(DEFAULT_CSV), dtype=str).fillna("")
+        df.columns = df.columns.str.strip()
+        for col in df.columns:
+            df[col] = df[col].str.strip()
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse default CSV: {e}")
+
+    if df.empty:
+        raise HTTPException(400, "Default CSV is empty")
+
+    missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing_cols:
+        raise HTTPException(400, f"Missing columns in default CSV: {', '.join(missing_cols)}")
+
+    eda = compute_eda(df)
+
+    rows = df.to_dict(orient="records")
+    error_rows, valid_rows = [], []
+    for i, row in enumerate(rows):
+        errs = validate_row(row, i)
+        if errs:
+            error_rows.append({"rowIndex": i + 2, "row": row, "errors": errs})
+        else:
+            valid_rows.append(row)
+
+    valid_df = pd.DataFrame(valid_rows) if valid_rows else pd.DataFrame(columns=df.columns)
+    charts = build_charts(valid_df) if not valid_df.empty else {}
+
+    return JSONResponse({
+        "success":    True,
+        "totalRows":  len(rows),
+        "validCount": len(valid_rows),
+        "errorCount": len(error_rows),
+        "eda":        eda,
+        "errorRows":  error_rows,
+        "validRows":  valid_rows,
+        "charts":     charts,
+    })
+
 
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
