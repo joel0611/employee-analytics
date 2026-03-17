@@ -5,11 +5,14 @@
 const API = 'http://localhost:3001';
 
 // Global state
-let allValidRows = [];
-let allEmployees = [];
-let charts = {};
-let insightsFetched = false;
+let allValidRows      = [];
+let allEmployees      = [];
+let charts            = {};
+let insightsFetched   = false;
 let validationFetched = false;
+let designationSkills = {};   // map: designation → required skills array
+let currentSort       = 'none'; // 'none' | 'designation' | 'readiness'
+let readinessCache    = {};   // empID → score
 
 // ──────────────────────────────────────────────
 // Tab navigation
@@ -47,12 +50,10 @@ function toast(msg, type = 'info') {
 // Drag and drop
 // ──────────────────────────────────────────────
 const uploadZone = document.getElementById('uploadZone');
-const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
+const fileInput  = document.getElementById('fileInput');
+const uploadBtn  = document.getElementById('uploadBtn');
 
-// Button click → open file picker directly
 uploadBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
-// Zone click → open file picker only if not clicking the button
 uploadZone.addEventListener('click', (e) => { if (e.target !== uploadBtn) fileInput.click(); });
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
@@ -85,34 +86,10 @@ async function processFile(file) {
       return;
     }
 
-    // Store state
-    allValidRows = data.validRows;
-    allEmployees = data.validRows; // start with valid rows for employee tab
-
-    // Update header badge
-    document.getElementById('datasetBadge').textContent =
-      `${data.totalRows} records loaded`;
-
-    // Error badge
-    const errBadge = document.getElementById('errorBadge');
-    errBadge.textContent = data.errorCount;
-    errBadge.style.display = data.errorCount > 0 ? 'inline' : 'none';
-
-    // Populate all sections
-    renderOverview(data);
-    renderQuality(data);
-    renderCharts(data.charts);
-    renderEmployeeGrid(data.validRows);
-
-    // Reset flags
-    insightsFetched = false;
-    validationFetched = false;
-
+    applyData(data);
     hideLoading();
     toast(`Dataset loaded: ${data.totalRows} rows, ${data.errorCount} errors found`, data.errorCount > 0 ? 'info' : 'success');
     switchTab('overview');
-
-    // Kick off async validation
     fetchValidation(data.validRows);
 
   } catch (err) {
@@ -122,12 +99,34 @@ async function processFile(file) {
 }
 
 // ──────────────────────────────────────────────
+// Shared data application
+// ──────────────────────────────────────────────
+function applyData(data) {
+  allValidRows      = data.validRows;
+  allEmployees      = data.validRows;
+  designationSkills = data.designationSkills || {};
+  readinessCache    = {};
+  currentSort       = 'none';
+  insightsFetched   = false;
+  validationFetched = false;
+
+  document.getElementById('datasetBadge').textContent = `${data.totalRows} records loaded`;
+  const errBadge = document.getElementById('errorBadge');
+  errBadge.textContent = data.errorCount;
+  errBadge.style.display = data.errorCount > 0 ? 'inline' : 'none';
+
+  renderOverview(data);
+  renderQuality(data);
+  renderCharts(data.charts);
+  renderEmployeeGrid(data.validRows);
+}
+
+// ──────────────────────────────────────────────
 // Overview Tab
 // ──────────────────────────────────────────────
 function renderOverview(data) {
   const { eda } = data;
 
-  // Stat cards
   document.getElementById('overviewStats').innerHTML = `
     ${statCard('📄', data.totalRows, 'Total Records', '')}
     ${statCard('✅', data.validCount, 'Valid Rows', 'green')}
@@ -178,6 +177,24 @@ function renderOverview(data) {
     dupSec.style.display = 'none';
   }
 
+  // Intern anomalies section
+  const anomalies = eda.internAnomalies || [];
+  const internSec = document.getElementById('internAnomalySection');
+  if (anomalies.length > 0) {
+    internSec.style.display = 'block';
+    document.getElementById('internAnomalyTableBody').innerHTML = anomalies.map(a => `
+      <tr>
+        <td><span class="tag red">${esc(a.id)}</span></td>
+        <td>${esc(a.name)}</td>
+        <td>${esc(a.designation)}</td>
+        <td><span class="tag yellow">${a.yoe} yrs</span></td>
+        <td style="font-size:0.78rem;color:var(--accent-warn)">⚠ Intern with YoE > 1 year — possible data entry error</td>
+      </tr>
+    `).join('');
+  } else {
+    internSec.style.display = 'none';
+  }
+
   // Invalid names/addresses section — show loading state immediately
   document.getElementById('invalidNamesSection').style.display = 'block';
   document.getElementById('invalidNamesLoading').style.display = 'flex';
@@ -200,15 +217,63 @@ function statCard(icon, value, label, cls) {
 // Data Quality Tab
 // ──────────────────────────────────────────────
 function renderQuality(data) {
-  const { errorRows, validCount, totalRows } = data;
+  const { errorRows, validCount, totalRows, eda } = data;
+  const dq = eda?.dqScore || {};
 
+  // Summary stat cards
   document.getElementById('qualityStats').innerHTML = `
     ${statCard('📋', totalRows, 'Total Records', '')}
     ${statCard('✅', validCount, 'Passed All Rules', 'green')}
     ${statCard('❌', errorRows.length, 'Failed Validation', 'red')}
-    ${statCard('📏', '6', 'Rules Applied', 'purple')}
+    ${statCard('📏', '6+', 'Rules Applied', 'purple')}
   `;
 
+  // Data Quality Score widget
+  const dqWrap = document.getElementById('dqScoreWrap');
+  if (dq.overall !== undefined) {
+    const gauge = scoreGaugeColor(dq.overall);
+    dqWrap.style.display = 'block';
+    dqWrap.innerHTML = `
+      <div class="dq-score-card">
+        <div class="dq-score-header">
+          <div class="dq-overall-wrap">
+            <div class="dq-overall-label">Overall Data Quality Score</div>
+            <div class="dq-overall-score" style="color:${gauge.color}">${dq.overall}<span style="font-size:1rem;color:var(--text-muted)">/100</span></div>
+            <div class="dq-grade" style="background:${gauge.color}20;color:${gauge.color};border:1px solid ${gauge.color}40">${gauge.grade}</div>
+          </div>
+          <div class="dq-dimensions">
+            ${dqDimensionBar('🎯 Accuracy', dq.accuracy, 'Rows with valid YoE range & no anomalies')}
+            ${dqDimensionBar('✅ Validity', dq.validity, 'Rows passing all format rules')}
+            ${dqDimensionBar('📦 Completeness', dq.completeness, 'Non-missing cells across all required columns')}
+            ${dqDimensionBar('🔑 Uniqueness', dq.uniqueness, 'Rows with unique Employee IDs')}
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    dqWrap.style.display = 'none';
+  }
+
+  // Intern anomalies in DQ tab
+  const anomalies = eda?.internAnomalies || [];
+  const dqInternSec = document.getElementById('dqInternAnomalySection');
+  if (anomalies.length > 0) {
+    dqInternSec.style.display = 'block';
+    document.getElementById('dqInternAnomalyBody').innerHTML = anomalies.map(a => `
+      <tr>
+        <td><span class="tag orange">⚠ Anomaly</span></td>
+        <td><span class="tag">${esc(a.id)}</span></td>
+        <td>${esc(a.name)}</td>
+        <td>${esc(a.designation)}</td>
+        <td>${a.yoe} yrs</td>
+        <td style="font-size:0.78rem;color:var(--accent-warn)">Intern with YoE > 1 year impacts Accuracy score</td>
+      </tr>
+    `).join('');
+  } else {
+    dqInternSec.style.display = 'none';
+  }
+
+  // Error rows table
   const tbody = document.getElementById('errorTableBody');
   tbody.innerHTML = '';
 
@@ -222,6 +287,7 @@ function renderQuality(data) {
   document.getElementById('noErrorsMsg').style.display = 'none';
 
   for (const { rowIndex, row, errors } of errorRows) {
+    const isAnomaly = errors.some(e => e.includes('Anomaly'));
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="tag red">Row ${rowIndex}</span></td>
@@ -235,12 +301,35 @@ function renderQuality(data) {
       <td style="max-width:140px">${esc(row['Skills'] || '—')}</td>
       <td>
         <ul class="error-list">
-          ${errors.map(e => `<li>${esc(e)}</li>`).join('')}
+          ${errors.map(e => `<li${e.includes('Anomaly') ? ' style="color:var(--accent-warn)"' : ''}>${esc(e)}</li>`).join('')}
         </ul>
       </td>
     `;
     tbody.appendChild(tr);
   }
+}
+
+function dqDimensionBar(label, value, tooltip) {
+  const pct = Math.min(Math.max(value || 0, 0), 100);
+  const color = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444';
+  return `
+    <div class="dq-dim" title="${esc(tooltip)}">
+      <div class="dq-dim-header">
+        <span class="dq-dim-label">${label}</span>
+        <span class="dq-dim-val" style="color:${color}">${value}%</span>
+      </div>
+      <div class="dq-dim-bar">
+        <div class="dq-dim-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+    </div>
+  `;
+}
+
+function scoreGaugeColor(score) {
+  if (score >= 90) return { color: '#10b981', grade: 'Excellent' };
+  if (score >= 75) return { color: '#3b82f6', grade: 'Good' };
+  if (score >= 60) return { color: '#f59e0b', grade: 'Fair' };
+  return { color: '#ef4444', grade: 'Poor' };
 }
 
 // ──────────────────────────────────────────────
@@ -251,18 +340,6 @@ const CHART_COLORS = [
   '#8b5cf6', '#14b8a6', '#f97316', '#06b6d4', '#a855f7',
   '#22c55e', '#ef4444', '#eab308', '#0ea5e9', '#d946ef'
 ];
-
-const CHART_OPTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 12 } } },
-  },
-  scales: {
-    x: { ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-    y: { ticks: { color: '#94a3b8', font: { family: 'Inter', size: 11 } }, grid: { color: 'rgba(255,255,255,0.06)' } },
-  }
-};
 
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
 
@@ -366,28 +443,63 @@ function renderCharts({ educationDist, designationDist, topSkills, yoeBuckets })
 }
 
 // ──────────────────────────────────────────────
-// Employee Grid
+// Employee Grid — sort & filter
 // ──────────────────────────────────────────────
+function getFilteredSorted() {
+  const q = (document.getElementById('empSearch')?.value || '').toLowerCase().trim();
+  let list = q
+    ? allValidRows.filter(e =>
+      (e['Name'] || '').toLowerCase().includes(q) ||
+      (e['Employee ID'] || '').toLowerCase().includes(q)
+    )
+    : [...allValidRows];
+
+  if (currentSort === 'designation') {
+    list.sort((a, b) => (a['Designation'] || '').localeCompare(b['Designation'] || ''));
+  } else if (currentSort === 'readiness') {
+    list.sort((a, b) => {
+      const sa = readinessCache[a['Employee ID']] ?? -1;
+      const sb = readinessCache[b['Employee ID']] ?? -1;
+      return sb - sa; // descending
+    });
+  }
+  return list;
+}
+
 function renderEmployeeGrid(employees) {
   const grid = document.getElementById('employeeGrid');
 
   if (!employees || employees.length === 0) {
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No valid employee records to display.</p></div>`;
+    // Hide radar section
+    const rs = document.getElementById('designationRadarSection');
+    if (rs) rs.style.display = 'none';
     return;
   }
 
   grid.innerHTML = employees.map(emp => empCardHTML(emp)).join('');
+
+  // Radar chart for designation sort
+  if (currentSort === 'designation') {
+    renderDesignationRadar(employees);
+  } else {
+    const rs = document.getElementById('designationRadarSection');
+    if (rs) rs.style.display = 'none';
+  }
 }
 
 function empCardHTML(emp) {
-  const initials = (emp['Name'] || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-  const skills = (emp['Skills'] || '').split(/[,;|]+/).map(s => s.trim()).filter(Boolean);
+  const initials  = (emp['Name'] || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  const skills    = (emp['Skills'] || '').split(/[,;|]+/).map(s => s.trim()).filter(Boolean);
   const visSkills = skills.slice(0, 4);
   const extraCount = skills.length - 4;
   const id = emp['Employee ID'];
+  const score = readinessCache[id];
+  const isInternAnomaly = isIntern(emp['Designation'] || '') && parseFloat(emp['YoE']) > 1;
 
   return `
-    <div class="emp-card" onclick="openEmployeeModal(${JSON.stringify(emp).replace(/"/g, '&quot;')})" id="card-${esc(id)}">
+    <div class="emp-card${isInternAnomaly ? ' anomaly-card' : ''}" onclick="openEmployeeModal(${JSON.stringify(emp).replace(/"/g, '&quot;')})" id="card-${esc(id)}">
+      ${isInternAnomaly ? `<div class="anomaly-ribbon" title="Intern with YoE > 1 year — data anomaly">⚠ Anomaly</div>` : ''}
       <div class="emp-avatar">${initials}</div>
       <div class="emp-name">${esc(emp['Name'])}</div>
       <div class="emp-role">${esc(emp['Designation'])} • ${esc(id)}</div>
@@ -400,22 +512,124 @@ function empCardHTML(emp) {
         ${extraCount > 0 ? `<span class="skill-tag more">+${extraCount} more</span>` : ''}
       </div>
       <div class="readiness-bar-wrap">
-        <div class="readiness-label"><span>AI Readiness</span><span id="score-${esc(id)}">—</span></div>
-        <div class="progress-bar"><div class="progress-fill" id="bar-${esc(id)}" style="width:0%"></div></div>
+        <div class="readiness-label"><span>AI Readiness</span><span id="score-${esc(id)}">${score !== undefined ? score + '/100' : '—'}</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="bar-${esc(id)}" style="width:${score !== undefined ? score : 0}%"></div></div>
       </div>
     </div>
   `;
 }
 
+function isIntern(designation) {
+  const d = (designation || '').toLowerCase();
+  return d.includes('intern') || d.includes('trainee') || d.includes('apprentice');
+}
+
 function filterEmployees(query) {
-  const q = query.toLowerCase().trim();
-  const filtered = q
-    ? allValidRows.filter(e =>
-      (e['Name'] || '').toLowerCase().includes(q) ||
-      (e['Employee ID'] || '').toLowerCase().includes(q)
-    )
-    : allValidRows;
-  renderEmployeeGrid(filtered);
+  renderEmployeeGrid(getFilteredSorted());
+}
+
+function sortEmployees(sortType) {
+  currentSort = sortType;
+  // Update sort button states
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === sortType));
+  renderEmployeeGrid(getFilteredSorted());
+}
+
+// ──────────────────────────────────────────────
+// Designation Radar Chart
+// ──────────────────────────────────────────────
+function renderDesignationRadar(employees) {
+  const radarSection = document.getElementById('designationRadarSection');
+  radarSection.style.display = 'block';
+
+  // Compute unique designations in this view
+  const designGroups = {};
+  for (const emp of employees) {
+    const d = emp['Designation'] || 'Unknown';
+    if (!designGroups[d]) designGroups[d] = [];
+    designGroups[d].push(emp);
+  }
+
+  // Build a list of unique required skills (union of top-designation required skills)
+  const allDesigns = Object.keys(designGroups);
+  const skillSet = new Set();
+  for (const d of allDesigns) {
+    const matched = findDesignKey(d);
+    if (matched && designationSkills[matched]) {
+      designationSkills[matched].forEach(s => skillSet.add(s));
+    }
+  }
+  // Cap at 10 skills for readability
+  const radarSkills = Array.from(skillSet).slice(0, 10);
+
+  if (radarSkills.length < 3) {
+    radarSection.style.display = 'none';
+    return;
+  }
+
+  // Build dataset per designation
+  const colors = CHART_COLORS;
+  const datasets = allDesigns.slice(0, 8).map((d, i) => {
+    const matched = findDesignKey(d);
+    const required = matched ? (designationSkills[matched] || []) : [];
+    const reqLower = new Set(required.map(s => s.toLowerCase()));
+
+    // Average skill coverage fraction
+    const groupEmps = designGroups[d];
+    const skillCoverage = radarSkills.map(skill => {
+      // Fraction of employees in this group who have this skill
+      const count = groupEmps.filter(emp => {
+        const empSkills = (emp['Skills'] || '').toLowerCase();
+        return empSkills.split(/[,;|/]+/).some(s => s.trim() === skill.toLowerCase());
+      }).length;
+      return Math.round((count / groupEmps.length) * 100);
+    });
+
+    return {
+      label: d,
+      data: skillCoverage,
+      borderColor: colors[i % colors.length],
+      backgroundColor: colors[i % colors.length] + '22',
+      borderWidth: 2,
+      pointBackgroundColor: colors[i % colors.length],
+      pointRadius: 4,
+    };
+  });
+
+  destroyChart('designationRadar');
+  charts['designationRadar'] = new Chart(document.getElementById('designationRadarChart'), {
+    type: 'radar',
+    data: { labels: radarSkills, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 }, padding: 10, boxWidth: 14 } },
+      },
+      scales: {
+        r: {
+          min: 0, max: 100,
+          ticks: { color: '#64748b', backdropColor: 'transparent', stepSize: 25 },
+          grid: { color: 'rgba(255,255,255,0.08)' },
+          pointLabels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } },
+          angleLines: { color: 'rgba(255,255,255,0.06)' },
+        }
+      }
+    }
+  });
+
+  // Update subtitle
+  const ct = allDesigns.length;
+  document.getElementById('radarSubtitle').textContent =
+    `Skill coverage % per designation — ${ct} designation group${ct !== 1 ? 's' : ''} shown`;
+}
+
+function findDesignKey(designation) {
+  const dl = designation.toLowerCase();
+  for (const k of Object.keys(designationSkills)) {
+    if (dl.includes(k.toLowerCase()) || k.toLowerCase().includes(dl.split(' ')[0])) return k;
+  }
+  return 'DEFAULT';
 }
 
 // ──────────────────────────────────────────────
@@ -423,12 +637,14 @@ function filterEmployees(query) {
 // ──────────────────────────────────────────────
 async function openEmployeeModal(emp) {
   const initials = (emp['Name'] || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  const isAnomaly = isIntern(emp['Designation'] || '') && parseFloat(emp['YoE']) > 1;
 
   document.getElementById('modalHeader').innerHTML = `
     <div class="modal-avatar">${initials}</div>
     <div>
       <div class="modal-name">${esc(emp['Name'])}</div>
       <div class="modal-role">${esc(emp['Designation'])} &nbsp;•&nbsp; ${esc(emp['Employee ID'])}</div>
+      ${isAnomaly ? `<div style="margin-top:6px"><span class="tag orange" style="font-size:0.72rem">⚠ Intern Anomaly: ${esc(emp['YoE'])} yrs experience</span></div>` : ''}
     </div>
   `;
 
@@ -457,14 +673,19 @@ async function openEmployeeModal(emp) {
     const r = data.review;
     const score = r.readinessScore || 0;
 
-    // Update readiness on card
+    // Cache and update card
     const id = emp['Employee ID'];
+    readinessCache[id] = score;
     const scoreEl = document.getElementById(`score-${esc(id)}`);
-    const barEl = document.getElementById(`bar-${esc(id)}`);
+    const barEl   = document.getElementById(`bar-${esc(id)}`);
     if (scoreEl) scoreEl.textContent = score + '/100';
-    if (barEl) barEl.style.width = score + '%';
+    if (barEl)   barEl.style.width = score + '%';
 
-    // Render modal body
+    // If sorted by readiness, re-render grid to reorder
+    if (currentSort === 'readiness') {
+      renderEmployeeGrid(getFilteredSorted());
+    }
+
     document.getElementById('modalBody').innerHTML = `
       <div class="modal-section">
         <div style="display:flex; align-items:center; gap:24px; margin-bottom:16px">
@@ -478,6 +699,7 @@ async function openEmployeeModal(emp) {
             </div>
           </div>
         </div>
+        ${isAnomaly ? `<div class="anomaly-alert">⚠ <strong>Data Anomaly:</strong> This employee is marked as an intern but has ${esc(emp['YoE'])} years of experience — this may indicate incorrect data.</div>` : ''}
       </div>
 
       <div class="modal-section">
@@ -494,6 +716,7 @@ async function openEmployeeModal(emp) {
         <div class="modal-section-title">⚠️ Identified Skill Gaps</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
           ${(r.skillGaps || []).map(g => `<span class="tag red">⚡ ${esc(g)}</span>`).join('')}
+          ${(r.skillGaps || []).length === 0 ? '<span class="valid-pill ok" style="font-size:0.8rem">No gaps detected ✓</span>' : ''}
         </div>
       </div>
 
@@ -550,7 +773,6 @@ async function fetchValidation(employees) {
 
     if (!resp.ok || data.error) {
       document.getElementById('validationLoading').innerHTML = `<p style="color:var(--accent-err)">Validation error: ${esc(data.error)}</p>`;
-      // Also hide loading state in overview
       document.getElementById('invalidNamesLoading').style.display = 'none';
       document.getElementById('noInvalidNamesMsg').style.display = 'block';
       document.getElementById('noInvalidNamesMsg').innerHTML = `<p style="color:var(--accent-err); font-size:0.82rem">Gemini validation error: ${esc(data.error)}</p>`;
@@ -559,7 +781,6 @@ async function fetchValidation(employees) {
 
     const validations = data.validations || [];
 
-    // ── Gemini Validation tab (full list) ──
     document.getElementById('validationLoading').style.display = 'none';
     document.getElementById('validationTableWrap').style.display = 'block';
 
@@ -583,7 +804,7 @@ async function fetchValidation(employees) {
       `;
     }).join('');
 
-    // ── Overview tab — only invalid entries in a table ──
+    // Overview tab — only invalid entries
     const invalidRows = validations.filter(v => !v.nameValid || !v.addressValid);
     document.getElementById('invalidNamesLoading').style.display = 'none';
 
@@ -637,39 +858,14 @@ async function loadDefaultDataset() {
 
     if (!resp.ok || data.error) {
       hideLoading();
-      // Default file missing or invalid — silently wait for user upload
       console.warn('Default dataset not loaded:', data.error || resp.statusText);
       return;
     }
 
-    // Store state
-    allValidRows = data.validRows;
-    allEmployees = data.validRows;
-
-    // Update header badge
-    document.getElementById('datasetBadge').textContent =
-      `${data.totalRows} records loaded`;
-
-    // Error badge
-    const errBadge = document.getElementById('errorBadge');
-    errBadge.textContent = data.errorCount;
-    errBadge.style.display = data.errorCount > 0 ? 'inline' : 'none';
-
-    // Populate all sections
-    renderOverview(data);
-    renderQuality(data);
-    renderCharts(data.charts);
-    renderEmployeeGrid(data.validRows);
-
-    // Reset flags
-    insightsFetched = false;
-    validationFetched = false;
-
+    applyData(data);
     hideLoading();
     toast(`Default dataset loaded: ${data.totalRows} rows, ${data.errorCount} errors found`, data.errorCount > 0 ? 'info' : 'success');
     switchTab('overview');
-
-    // Kick off async validation
     fetchValidation(data.validRows);
 
   } catch (err) {
