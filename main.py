@@ -1,6 +1,5 @@
 """
 Employee Analytics — FastAPI Backend
-Replaces the Node.js/Express server.
 EDA & validation powered by pandas.
 AI narrative via Gemini; skill gaps & course recommendations are rule-based.
 """
