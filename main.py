@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import phonenumbers
 import google.genai as genai
 from google.genai import types as genai_types
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -41,8 +42,8 @@ REQUIRED_COLUMNS = [
 ]
 
 EMAIL_RE  = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-PHONE_RE  = re.compile(r"^(\+\d{1,3}[\s-]?)?\d{10}$")
 EMP_ID_RE = re.compile(r"^E\d+$")
+INTERN_TITLES = ["intern", "trainee", "apprentice"]
 
 app = FastAPI(title="Employee Analytics")
 
@@ -78,7 +79,37 @@ def gemini_generate(prompt: str) -> str:
 # Pandas EDA
 # ──────────────────────────────────────────────────────────────
 
+def validate_phone(phone_raw: str) -> bool:
+    """Validate phone numbers using the phonenumbers library."""
+    if not phone_raw or not phone_raw.strip():
+        return False
+    cleaned = phone_raw.strip()
+    # Try with default region India first, then without region (requires + prefix)
+    for region in ["IN", "US", None]:
+        try:
+            parsed = phonenumbers.parse(cleaned, region)
+            if phonenumbers.is_valid_number(parsed):
+                return True
+        except phonenumbers.NumberParseException:
+            continue
+    # Fallback: try adding + prefix if it looks like international
+    if not cleaned.startswith("+"):
+        try:
+            parsed = phonenumbers.parse("+" + cleaned, None)
+            if phonenumbers.is_valid_number(parsed):
+                return True
+        except phonenumbers.NumberParseException:
+            pass
+    return False
+
+
+def is_intern(designation: str) -> bool:
+    d = designation.lower().strip()
+    return any(t in d for t in INTERN_TITLES)
+
+
 def compute_eda(df: pd.DataFrame) -> dict:
+    total = len(df)
     missing_counts = {col: int(df[col].isna().sum() + (df[col] == "").sum())
                       for col in REQUIRED_COLUMNS if col in df.columns}
 
@@ -95,11 +126,60 @@ def compute_eda(df: pd.DataFrame) -> dict:
         "count":  int(len(yoe)),
     }
 
+    # Intern anomaly: designation contains intern keyword AND YoE > 1
+    intern_anomalies = []
+    for _, row in df.iterrows():
+        desig = str(row.get("Designation", "")).strip()
+        yoe_val = pd.to_numeric(row.get("YoE", ""), errors="coerce")
+        if is_intern(desig) and not pd.isna(yoe_val) and yoe_val > 1:
+            intern_anomalies.append({
+                "id":  str(row.get("Employee ID", "")),
+                "name": str(row.get("Name", "")),
+                "designation": desig,
+                "yoe": float(yoe_val),
+            })
+
+    # ── Data Quality Score ────────────────────────────────────────
+    # Completeness: fraction of non-missing cells across required columns
+    total_cells = total * len(REQUIRED_COLUMNS) if total else 1
+    missing_cells = sum(missing_counts.values())
+    completeness = round((1 - missing_cells / total_cells) * 100, 1) if total_cells else 100.0
+
+    # Validity: fraction of rows that pass format rules (email, phone, emp ID, YoE)
+    valid_mask = []
+    for _, row in df.iterrows():
+        row_d = row.to_dict()
+        errs = validate_row(row_d, 0)
+        valid_mask.append(len(errs) == 0)
+    validity_count = sum(valid_mask)
+    validity = round(validity_count / total * 100, 1) if total else 100.0
+
+    # Uniqueness: fraction of rows with unique Employee ID
+    dup_count = int(df.duplicated("Employee ID", keep=False).sum()) if total else 0
+    uniqueness = round((1 - dup_count / total) * 100, 1) if total else 100.0
+
+    # Accuracy: proxy — rows that are NOT intern anomalies AND have valid YoE range
+    yoe_num = pd.to_numeric(df["YoE"], errors="coerce")
+    yoe_in_range = ((yoe_num >= 0) & (yoe_num <= 50)).sum()
+    accuracy = round(yoe_in_range / total * 100, 1) if total else 100.0
+
+    overall_dq = round((completeness + validity + uniqueness + accuracy) / 4, 1)
+
+    dq_score = {
+        "overall": overall_dq,
+        "completeness": completeness,
+        "validity": validity,
+        "uniqueness": uniqueness,
+        "accuracy": accuracy,
+    }
+
     return {
-        "totalRows":     len(df),
-        "missingCounts": missing_counts,
-        "duplicateIds":  dup_ids,
-        "yoeStats":      yoe_stats,
+        "totalRows":       total,
+        "missingCounts":   missing_counts,
+        "duplicateIds":    dup_ids,
+        "yoeStats":        yoe_stats,
+        "internAnomalies": intern_anomalies,
+        "dqScore":         dq_score,
     }
 
 
@@ -118,9 +198,9 @@ def validate_row(row: dict, idx: int) -> list[str]:
     if email and not EMAIL_RE.match(email):
         errors.append(f'Invalid Email ID: "{email}"')
 
-    phone = re.sub(r"[\s\-().]", "", str(row.get("Phone Number", "")).strip())
-    if phone and not PHONE_RE.match(phone):
-        errors.append(f'Invalid Phone Number: "{row.get("Phone Number", "")}"')
+    phone_raw = str(row.get("Phone Number", "")).strip()
+    if phone_raw and not validate_phone(phone_raw):
+        errors.append(f'Invalid Phone Number: "{phone_raw}" (not a recognised valid phone number)')
 
     yoe_raw = str(row.get("YoE", "")).strip()
     if yoe_raw:
@@ -132,6 +212,15 @@ def validate_row(row: dict, idx: int) -> list[str]:
                 errors.append(f'YoE out of range: "{yoe_raw}" (expected 0–50)')
         except ValueError:
             errors.append(f'YoE non-numeric: "{yoe_raw}"')
+
+    # Intern anomaly flagged in row errors too
+    desig = str(row.get("Designation", "")).strip()
+    if is_intern(desig) and yoe_raw:
+        try:
+            if float(yoe_raw) > 1:
+                errors.append(f'Anomaly: Intern with YoE > 1 year ("{yoe_raw}" yrs) — possible data error')
+        except ValueError:
+            pass
 
     return errors
 
@@ -383,14 +472,15 @@ async def load_default():
     charts = build_charts(valid_df) if not valid_df.empty else {}
 
     return JSONResponse({
-        "success":    True,
-        "totalRows":  len(rows),
-        "validCount": len(valid_rows),
-        "errorCount": len(error_rows),
-        "eda":        eda,
-        "errorRows":  error_rows,
-        "validRows":  valid_rows,
-        "charts":     charts,
+        "success":          True,
+        "totalRows":        len(rows),
+        "validCount":       len(valid_rows),
+        "errorCount":       len(error_rows),
+        "eda":              eda,
+        "errorRows":        error_rows,
+        "validRows":        valid_rows,
+        "charts":           charts,
+        "designationSkills": DESIGNATION_SKILLS,
     })
 
 
@@ -430,14 +520,15 @@ async def upload(file: UploadFile = File(...)):
     charts = build_charts(valid_df) if not valid_df.empty else {}
 
     return JSONResponse({
-        "success":    True,
-        "totalRows":  len(rows),
-        "validCount": len(valid_rows),
-        "errorCount": len(error_rows),
-        "eda":        eda,
-        "errorRows":  error_rows,
-        "validRows":  valid_rows,
-        "charts":     charts,
+        "success":          True,
+        "totalRows":        len(rows),
+        "validCount":       len(valid_rows),
+        "errorCount":       len(error_rows),
+        "eda":              eda,
+        "errorRows":        error_rows,
+        "validRows":        valid_rows,
+        "charts":           charts,
+        "designationSkills": DESIGNATION_SKILLS,
     })
 
 
@@ -544,7 +635,9 @@ async def validate_fields(body: ValidateRequest):
 # ──────────────────────────────────────────────────────────────
 
 if PUBLIC_DIR.exists():
-    app.mount("/static-assets", StaticFiles(directory=str(PUBLIC_DIR)), name="static")
+    @app.get("/")
+    async def root():
+        return FileResponse(str(PUBLIC_DIR / "index.html"))
 
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
@@ -552,10 +645,6 @@ if PUBLIC_DIR.exists():
         file_path = PUBLIC_DIR / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
-        return FileResponse(str(PUBLIC_DIR / "index.html"))
-
-    @app.get("/")
-    async def root():
         return FileResponse(str(PUBLIC_DIR / "index.html"))
 
 
