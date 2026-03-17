@@ -2,7 +2,7 @@
 
 > A **GenAI-powered employee data quality and workforce intelligence platform** — inspired by **SAP Information Steward** methodology. Combines a Python/FastAPI backend with a sleek dark-mode frontend to deliver EDA, validation, AI-generated reviews, skill gap analysis, and data quality scoring.
 
-**Live Demo:** [Deployed on Vercel](https://employee-analytics.vercel.app)
+**Live Demo:** [Deployed on Vercel](https://employee-analytics-sigma.vercel.app/)
 
 ---
 
