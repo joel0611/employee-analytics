@@ -625,3 +625,57 @@ function esc(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// ──────────────────────────────────────────────
+// Auto-load default dataset on startup
+// ──────────────────────────────────────────────
+async function loadDefaultDataset() {
+  showLoading('Loading default dataset…');
+  try {
+    const resp = await fetch(`${API}/api/load-default`);
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      hideLoading();
+      // Default file missing or invalid — silently wait for user upload
+      console.warn('Default dataset not loaded:', data.error || resp.statusText);
+      return;
+    }
+
+    // Store state
+    allValidRows = data.validRows;
+    allEmployees = data.validRows;
+
+    // Update header badge
+    document.getElementById('datasetBadge').textContent =
+      `${data.totalRows} records loaded`;
+
+    // Error badge
+    const errBadge = document.getElementById('errorBadge');
+    errBadge.textContent = data.errorCount;
+    errBadge.style.display = data.errorCount > 0 ? 'inline' : 'none';
+
+    // Populate all sections
+    renderOverview(data);
+    renderQuality(data);
+    renderCharts(data.charts);
+    renderEmployeeGrid(data.validRows);
+
+    // Reset flags
+    insightsFetched = false;
+    validationFetched = false;
+
+    hideLoading();
+    toast(`Default dataset loaded: ${data.totalRows} rows, ${data.errorCount} errors found`, data.errorCount > 0 ? 'info' : 'success');
+    switchTab('overview');
+
+    // Kick off async validation
+    fetchValidation(data.validRows);
+
+  } catch (err) {
+    hideLoading();
+    console.warn('Could not load default dataset:', err.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadDefaultDataset);
