@@ -91,26 +91,26 @@ The initiative was aligned with the organization's strategic program to:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                       Client Browser                            │
-│         HTML5 SPA (index.html + style.css + app.js)            │
+│         HTML5 SPA (index.html + style.css + app.js)             │
 │      6 Tabs: Upload | Overview | Data Quality | Charts |        │
 │              Employees | Validation                             │
 └────────────────────────┬────────────────────────────────────────┘
                          │ HTTP / REST
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend (main.py)                      │
-│   Port 3001  ·  Python 3.11+  ·  Uvicorn ASGI Server           │
+│                   FastAPI Backend (main.py)                     │
+│   Port 3001  ·  Python 3.11+  ·  Uvicorn ASGI Server            │
 │                                                                 │
-│  ┌──────────────┐  ┌───────────────┐  ┌─────────────────────┐  │
-│  │  /api/upload │  │/api/employee- │  │/api/validate-fields │  │
-│  │  CSV Parsing │  │    review     │  │ Name + Address AI   │  │
-│  │  EDA Engine  │  │ Skill Gap +   │  │  Gemini + Heuristic │  │
-│  │  Validation  │  │ Course Recos  │  │  Fallback           │  │
-│  └──────────────┘  └───────────────┘  └─────────────────────┘  │
+│  ┌──────────────┐  ┌───────────────┐  ┌─────────────────────┐   │
+│  │  /api/upload │  │/api/employee- │  │/api/validate-fields │   │
+│  │  CSV Parsing │  │    review     │  │ Name + Address AI   │   │
+│  │  EDA Engine  │  │ Skill Gap +   │  │  Gemini + Heuristic │   │
+│  │  Validation  │  │ Course Recos  │  │  Fallback           │   │
+│  └──────────────┘  └───────────────┘  └─────────────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │               pandas EDA Engine                          │   │
-│  │  Missing Values · Duplicate IDs · YoE Stats · Charts    │   │
+│  │  Missing Values · Duplicate IDs · YoE Stats · Charts     │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
