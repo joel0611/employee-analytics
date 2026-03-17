@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenAI Employee Analytics App</title>
+  <meta name="description"
+    content="GenAI-powered employee data quality and analytics platform inspired by SAP Information Steward." />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">Processing…</div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- App header -->
+  <header class="app-header">
+    <div class="header-logo">
+      <div class="logo-icon">🔬</div>
+      <div>
+        <h1>GenAI Employee Analytics</h1>
+        <span>Data Quality &amp; Workforce Intelligence Platform</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="header-badge" id="datasetBadge">No dataset loaded</span>
+      <span class="header-badge">Powered by Gemini</span>
+    </div>
+  </header>
+
+  <!-- Nav tabs -->
+  <nav class="nav-tabs" id="navTabs">
+    <div class="nav-tab" data-tab="upload" onclick="switchTab('upload')">📤 Upload</div>
+    <div class="nav-tab" data-tab="overview" onclick="switchTab('overview')">📊 Overview</div>
+    <div class="nav-tab" data-tab="quality" onclick="switchTab('quality')">🛡️ Data Quality <span class="badge"
+        id="errorBadge" style="display:none">0</span></div>
+    <div class="nav-tab" data-tab="charts" onclick="switchTab('charts')">📈 Visualizations</div>
+    <div class="nav-tab" data-tab="employees" onclick="switchTab('employees')">👥 Employees</div>
+    <div class="nav-tab" data-tab="validation" onclick="switchTab('validation')">✅ Validation</div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- UPLOAD TAB -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <div class="tab-panel active" id="tab-upload">
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon">📂</div>
+        <h2>Upload Employee Dataset</h2>
+        <p>Drag &amp; drop a CSV file or click to browse</p>
+        <button class="upload-btn" id="uploadBtn">
+          📁 Choose CSV File
+        </button>
+        <input class="file-input" type="file" id="fileInput" accept=".csv" />
+        <p class="upload-hint">Required columns:</p>
+        <div class="upload-cols">
+          <span class="col-chip">Employee ID</span>
+          <span class="col-chip">Name</span>
+          <span class="col-chip">Email ID</span>
+          <span class="col-chip">Designation</span>
+          <span class="col-chip">Phone Number</span>
+          <span class="col-chip">Address</span>
+          <span class="col-chip">Education</span>
+          <span class="col-chip">Skills</span>
+          <span class="col-chip">YoE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- OVERVIEW TAB -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-overview">
+      <div class="section">
+        <div class="stat-grid" id="overviewStats"></div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Missing Values Summary</div>
+            <div class="card-subtitle">Count of missing values per column</div>
+          </div>
+          <div class="table-wrap">
+            <table id="missingTable">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th>Total Rows</th>
+                  <th>Missing Count</th>
+                  <th>Missing %</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="missingTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">YoE Summary Statistics</div>
+            <div class="card-subtitle">Years of Experience — valid records only</div>
+          </div>
+          <div class="stat-grid" id="yoeStats"></div>
+        </div>
+      </div>
+
+      <div class="section" id="duplicateSection" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="color: var(--accent-warn)">Duplicate Employee IDs</div>
+          </div>
+          <div id="duplicateList"></div>
+        </div>
+      </div>
+
+      <div class="section" id="invalidNamesSection" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="color: var(--accent-err)">Incorrect Names &amp; Addresses (AI Detected)
+            </div>
+            <div class="card-subtitle">Employees flagged by AI for implausible names or addresses</div>
+          </div>
+          <div id="invalidNamesLoading" class="empty-state" style="padding:18px 0">
+            <div class="spinner" style="margin:0 auto 10px; width:28px; height:28px;"></div>
+            <p style="font-size:0.82rem">AI is validating names and addresses…</p>
+          </div>
+          <div class="table-wrap" id="invalidNamesTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee ID</th>
+                  <th>Name</th>
+                  <th>Name Issue</th>
+                  <th>Address</th>
+                  <th>Address Issue</th>
+                </tr>
+              </thead>
+              <tbody id="invalidNamesTableBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="noInvalidNamesMsg" style="display:none; padding:14px 0">
+            <div class="empty-icon" style="font-size:1.4rem">✅</div>
+            <p style="font-size:0.82rem">All names and addresses passed validation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- DATA QUALITY TAB -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-quality">
+      <div class="section">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Data Quality Rules &amp; Validation Results</div>
+            <div class="card-subtitle">Rows that failed one or more validation rules</div>
+          </div>
+
+          <div class="stat-grid" style="margin-bottom:24px" id="qualityStats"></div>
+
+          <div id="errorRowsTableWrap">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Row #</th>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Email ID</th>
+                    <th>Phone</th>
+                    <th>Education</th>
+                    <th>Designation</th>
+                    <th>YoE</th>
+                    <th>Skills</th>
+                    <th>Validation Errors</th>
+                  </tr>
+                </thead>
+                <tbody id="errorTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="empty-state" id="noErrorsMsg" style="display:none">
+            <div class="empty-icon">✅</div>
+            <p>All rows passed validation — no errors found!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- CHARTS TAB -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-charts">
+      <div class="section grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🎓 Education Level Distribution</div>
+            <div class="card-subtitle">Valid records only</div>
+          </div>
+          <div class="chart-container" style="height:300px">
+            <canvas id="educationChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Employees by Designation</div>
+            <div class="card-subtitle">Valid records only</div>
+          </div>
+          <div class="chart-container" style="height:300px">
+            <canvas id="designationChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="section grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Top 15 Skills Frequency</div>
+            <div class="card-subtitle">Most common skills across all valid employees</div>
+          </div>
+          <div class="chart-container" style="height:340px">
+            <canvas id="skillsChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Years of Experience Distribution</div>
+            <div class="card-subtitle">Valid records only</div>
+          </div>
+          <div class="chart-container" style="height:340px">
+            <canvas id="yoeChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- EMPLOYEES TAB -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-employees">
+      <div class="section"
+        style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:1rem; font-weight:700; color:var(--text-pri); margin-bottom:3px;">Employee Profiles</h2>
+          <p style="font-size:0.8rem; color:var(--text-muted)">Click any card or search to get an AI-generated review,
+            skill gap, and course recommendations.</p>
+        </div>
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="empSearch" type="text" placeholder="Search by name or Employee ID…"
+            oninput="filterEmployees(this.value)" />
+        </div>
+      </div>
+      <div class="employee-grid" id="employeeGrid">
+        <div class="empty-state">
+          <div class="empty-icon">👥</div>
+          <p>Upload a dataset to see employee profiles.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- GEMINI VALIDATION TAB -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="tab-panel" id="tab-validation">
+      <div class="section">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Name &amp; Address Validation</div>
+            <div class="card-subtitle">Gemini check on first 5 employees &middot; heuristics for all others</div>
+          </div>
+          <div id="validationLoading" class="empty-state">
+            <p>Upload a dataset to run validation on names and addresses.</p>
+          </div>
+          <div class="table-wrap" id="validationTableWrap" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee ID</th>
+                  <th>Name</th>
+                  <th>Name Valid?</th>
+                  <th>Name Issue</th>
+                  <th>Address</th>
+                  <th>Address Valid?</th>
+                  <th>Address Issue</th>
+                </tr>
+              </thead>
+              <tbody id="validationTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- EMPLOYEE DETAIL MODAL -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-bg" id="modalBg" onclick="closeModal(event)">
+    <div class="modal" id="empModal">
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+      <div class="modal-header" id="modalHeader"></div>
+      <div id="modalBody">
+        <div class="empty-state">
+          <div class="spinner" style="margin:0 auto 12px"></div>
+          <p>Generating AI review…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
