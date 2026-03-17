@@ -1,11 +1,9 @@
 # Project Report
 ## GenAI Employee Analytics Platform
-**Document Type:** Corporate Project Report
-**Project Code:** EMPL-ANA-2026
+
 **Status:** Completed — Production Ready
-**Prepared By:** Project Delivery Team
+**Prepared By:** Joel Basil Kurian
 **Report Date:** March 17, 2026
-**Classification:** Internal — Restricted
 
 ---
 
@@ -34,8 +32,6 @@
 The **GenAI Employee Analytics Platform** is an enterprise-grade, AI-augmented workforce intelligence application developed to modernize the organization's HR data quality management and talent analytics capabilities. The platform enables HR teams and operations managers to upload employee datasets in CSV format and receive immediate, comprehensive reports covering data quality violations, exploratory data analysis (EDA), skills gap assessments, personalized learning recommendations, and AI-validated name and address profiling.
 
 The project was executed across **three focused sprints** over a condensed two-week timeline, beginning with a Node.js/Express prototype and culminating in a production-ready Python FastAPI backend. The final solution integrates Google's **Gemini 2.0 Flash** large language model for narrative HR assessments and name/address validation, with a rule-based engine handling skill gap analysis for performance and reliability.
-
-This project was delivered in adherence with the **Transform for SAP** principle — specifically the **SAP Transform** methodology — ensuring that the solution is aligned with enterprise data stewardship standards comparable to **SAP Information Steward**, and that the architecture is modular and ready for future SAP ecosystem integration.
 
 ---
 
@@ -78,7 +74,6 @@ The initiative was aligned with the organization's strategic program to:
 
 ### 3.2 Out of Scope (v1.0)
 
-- Integration with live SAP HCM or SuccessFactors systems (planned for v2.0)
 - Role-based access control / multi-user authentication
 - Batch processing of multiple CSV files simultaneously
 
@@ -142,63 +137,23 @@ The initiative was aligned with the organization's strategic program to:
 
 ---
 
-## 5. SAP Transform Alignment
-
-### 5.1 Transform for SAP Principle
-
-This project was conceived and executed under the **Transform for SAP** guiding principle — a modern approach to enterprise application modernization that aligns custom-built digital solutions with SAP's architectural best practices and data governance standards without requiring full "lift-and-shift" SAP adoption.
-
-The Transform for SAP model emphasizes:
-
-| Principle | How This Project Applied It |
-|---|---|
-| **Data Stewardship First** | All features were designed around data correctness: validation, profiling, and quality scoring — mirroring SAP Information Steward's DQ rule engine |
-| **Open Platform Interoperability** | REST APIs built in FastAPI are SAP BTP-ready; future API Management integration requires no backend change |
-| **Composable Architecture** | Each functional module (EDA, validation, skill gap, AI review) is independently callable — enabling future embedding into SAP Fiori launchpad apps |
-| **AI-Augmented Workflows** | Gemini 2.0 Flash provides AI augmentation analogous to SAP's Joule AI assistant, embedded natively in the data quality workflow |
-| **Clean Core Alignment** | All business logic is externalized from the UI; the Python backend acts as a clean-core service analogous to SAP's "Side-by-Side Extensibility" pattern |
-
-### 5.2 SAP Information Steward Parity
-
-The application was specifically designed to deliver capabilities comparable to **SAP Information Steward** in the following dimensions:
-
-| SAP Information Steward Feature | This Project's Equivalent |
-|---|---|
-| Data Quality Rules Engine | Rule-based validator with 7 validation categories per row |
-| Data Profiling & Statistics | pandas EDA: missing values, duplicates, YoE distribution |
-| Record-Level Error Reporting | Data Quality tab with per-row error annotations |
-| Completeness & Validity Scoring | `qualityScore` metric: % of rows passing all rules |
-| Name & Address Validation (AI) | Gemini-powered name/address plausibility check |
-| Data Insight Dashboards | Four Chart.js visualizations: Education, Designation, Skills, YoE |
-
-### 5.3 SAP BTP Integration Readiness
-
-The architecture is designed for frictionless integration into the **SAP Business Technology Platform (BTP)**:
-
-- The FastAPI backend can be containerized (Docker) and deployed to **SAP BTP Cloud Foundry** or **Kyma** without modification
-- REST endpoints conform to SAP's API style guidelines and are compatible with **SAP API Management**
-- The frontend SPA can be deployed as an **SAP Fiori app** on the launchpad with minor UI shell adaptations
-- Authentication can be layered via **SAP XSUAA** OAuth without changing application logic
-
----
-
-## 6. Sprint Plan & Execution
+## 5. Sprint Plan & Execution
 
 ### Sprint 1 — Foundation & Prototype
-**Duration:** Day 1–3 | **Status:** ✅ Completed
+**Duration:** Day 1–3 | **Status:** Completed
 
 **Goal:** Build the initial proof-of-concept application with core data upload and validation features.
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Scaffold Node.js/Express backend | Backend Developer | ✅ Done |
-| Implement CSV upload and parsing (multer + csv-parser) | Backend Developer | ✅ Done |
-| Implement EDA: missing values, duplicate ID detection | Backend Developer | ✅ Done |
-| Build initial rule-based row validator (email, phone, EmpID, YoE) | Backend Developer | ✅ Done |
-| Design HTML/CSS SPA (Upload, Overview, Data Quality tabs) | Frontend Developer | ✅ Done |
-| Integrate Chart.js — Education, Designation, Skills, YoE charts | Frontend Developer | ✅ Done |
-| Integrate Gemini API (Node.js `@google/generative-ai`) | AI Engineer | ✅ Done |
-| Deploy initial version locally; smoke test with sample CSV | QA | ✅ Done |
+| Scaffold Node.js/Express backend | Self | Done |
+| Implement CSV upload and parsing (multer + csv-parser) | Self | Done |
+| Implement EDA: missing values, duplicate ID detection | Self | Done |
+| Build initial rule-based row validator (email, phone, EmpID, YoE) | Self | Done |
+| Design HTML/CSS SPA (Upload, Overview, Data Quality tabs) | Self | Done |
+| Integrate Chart.js — Education, Designation, Skills, YoE charts | Self | Done |
+| Integrate Gemini API (Node.js `@google/generative-ai`) | Self | Done |
+| Deploy initial version locally; smoke test with sample CSV | Self | Done |
 
 **Sprint 1 Outcomes:**
 - Functional 3-tab SPA with CSV ingestion, validation, and charting
@@ -212,24 +167,24 @@ The architecture is designed for frictionless integration into the **SAP Busines
 ---
 
 ### Sprint 2 — Feature Expansion & AI Enhancement
-**Duration:** Day 4–8 | **Status:** ✅ Completed
+**Duration:** Day 4–8 | **Status:** Completed
 
 **Goal:** Expand the application with employee profiling, skill gap analysis, and Gemini-powered validation.
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Fix double-upload bug (state clear on new upload) | Frontend Developer | ✅ Done |
-| Remove AI Insights tab; absorb functionality into Overview | Frontend Developer | ✅ Done |
-| Rename "Gemini Validation" tab to "Validation" | Frontend Developer | ✅ Done |
-| Add Employees tab: card-based profile grid with search/filter | Frontend Developer | ✅ Done |
-| Build Employee Detail Modal (click-to-expand, AI review on demand) | Frontend Developer | ✅ Done |
-| Build skill gap rule engine: 20 designation matrices, 30+ course catalogue | Backend Developer | ✅ Done |
-| Implement `readinessScore`: skill coverage + YoE contribution + AI skill bonus | Backend Developer | ✅ Done |
-| `/api/employee-review` endpoint: Gemini narrative + rule-based skill gaps | AI Engineer | ✅ Done |
-| `/api/validate-fields` endpoint: Gemini + heuristic fallback | AI Engineer | ✅ Done |
-| Add Incorrect Names & Addresses section to Overview tab | Frontend Developer | ✅ Done |
-| Adjust YoE validation: negative YoE shown as error but not excluded from display | Backend Developer | ✅ Done |
-| Display errors in structured table format (not raw text) | Frontend Developer | ✅ Done |
+| Fix double-upload bug (state clear on new upload) | Self | Done |
+| Remove AI Insights tab; absorb functionality into Overview | Self | Done |
+| Rename "Gemini Validation" tab to "Validation" | Self | Done |
+| Add Employees tab: card-based profile grid with search/filter | Self | Done |
+| Build Employee Detail Modal (click-to-expand, AI review on demand) | Self | Done |
+| Build skill gap rule engine: 20 designation matrices, 30+ course catalogue | Self | Done |
+| Implement `readinessScore`: skill coverage + YoE contribution + AI skill bonus | Self | Done |
+| `/api/employee-review` endpoint: Gemini narrative + rule-based skill gaps | Self | Done |
+| `/api/validate-fields` endpoint: Gemini + heuristic fallback | Self | Done |
+| Add Incorrect Names & Addresses section to Overview tab | Self | Done |
+| Adjust YoE validation: negative YoE shown as error but not excluded from display | Self | Done |
+| Display errors in structured table format (not raw text) | Self | Done |
 
 **Sprint 2 Outcomes:**
 - Full 6-tab SPA operational
@@ -240,24 +195,24 @@ The architecture is designed for frictionless integration into the **SAP Busines
 ---
 
 ### Sprint 3 — Backend Migration & Production Hardening
-**Duration:** Day 9–12 | **Status:** ✅ Completed
+**Duration:** Day 9–12 | **Status:** Completed
 
 **Goal:** Migrate backend from Node.js/Express to Python (FastAPI + pandas). Harden validation, error handling, and deploy-readiness.
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Scaffold FastAPI project ([main.py](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/main.py), [requirements.txt](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/requirements.txt)) | Backend Developer | ✅ Done |
-| Port CSV ingestion from `multer` → `python-multipart` + `pandas` | Backend Developer | ✅ Done |
-| Port EDA from manual JS loops → `pandas` aggregations | Backend Developer | ✅ Done |
-| Port row validator: regex rules for email, phone, Employee ID, YoE | Backend Developer | ✅ Done |
-| Port chart data builder: `value_counts()`, skill frequency, YoE buckets | Backend Developer | ✅ Done |
-| Port Gemini integration to `google-genai` Python SDK | AI Engineer | ✅ Done |
-| Port skill gap engine: aliases, designation matrices, course catalogue | Backend Developer | ✅ Done |
-| Port heuristic name/address validator | Backend Developer | ✅ Done |
-| Add CORS middleware; serve SPA static files from FastAPI | Backend Developer | ✅ Done |
-| Validate API contract: confirm all frontend fetch calls work against new backend | QA | ✅ Done |
-| Regression test all 6 tabs with full employee CSV dataset | QA | ✅ Done |
-| Update [requirements.txt](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/requirements.txt); document startup procedure | Backend Developer | ✅ Done |
+| Scaffold FastAPI project ([main.py](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/main.py), [requirements.txt](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/requirements.txt)) | Self | Done |
+| Port CSV ingestion from `multer` → `python-multipart` + `pandas` | Self | Done |
+| Port EDA from manual JS loops → `pandas` aggregations | Self | Done |
+| Port row validator: regex rules for email, phone, Employee ID, YoE | Self | Done |
+| Port chart data builder: `value_counts()`, skill frequency, YoE buckets | Self | Done |
+| Port Gemini integration to `google-genai` Python SDK | Self | Done |
+| Port skill gap engine: aliases, designation matrices, course catalogue | Self | Done |
+| Port heuristic name/address validator | Self | Done |
+| Add CORS middleware; serve SPA static files from FastAPI | Self | Done |
+| Validate API contract: confirm all frontend fetch calls work against new backend | Self | Done |
+| Regression test all 6 tabs with full employee CSV dataset | Self | Done |
+| Update [requirements.txt](file:///c:/Users/USER/.gemini/antigravity/scratch/employee-analytics/requirements.txt); document startup procedure | Self | Done |
 
 **Sprint 3 Outcomes:**
 - Complete Python/FastAPI backend with 100% feature parity to Node.js version
@@ -325,6 +280,7 @@ The architecture is designed for frictionless integration into the **SAP Busines
 - Full error table: every failing row with all validation errors annotated inline
 - Quality stats bar: row counts, error rate
 - Clear "All Clear" state when no errors are present
+- Data Quality score based on the parameters - Completeness, Validity, Accuracy, Uniqueness
 
 ### 8.4 Visualizations Tab
 - **Education Distribution** — Pie chart (valid records)
@@ -335,6 +291,8 @@ The architecture is designed for frictionless integration into the **SAP Busines
 ### 8.5 Employees Tab
 - Card grid of all valid employees with avatar initials, designation chip, YoE badge
 - Real-time search by name or Employee ID
+- Radar chart with designation-skill distribution
+- Sorting based on AI readiness score and designation
 - Click-to-open employee detail modal with:
   - Personal and professional summary
   - Readiness Score (0–100) with colour-coded bar
@@ -415,17 +373,17 @@ All Gemini calls follow a **graceful degradation** pattern:
 
 | Test Case | Method | Result |
 |-----------|--------|--------|
-| Upload valid CSV with all required columns | Manual | ✅ Pass |
-| Upload CSV with missing columns | Manual | ✅ Error displayed: lists missing columns |
-| Upload non-CSV file | Manual | ✅ Rejected with friendly message |
-| Rows with missing email, phone, or Employee ID | Manual | ✅ Flagged in Data Quality tab |
-| Employee ID not matching `E\d+` pattern | Manual | ✅ Format error raised |
-| Negative YoE value | Manual | ✅ Error surfaced; excluded from stats |
-| YoE > 50 | Manual | ✅ Out-of-range error raised |
-| Duplicate Employee IDs | Manual | ✅ Both occurrences flagged |
-| Employee card click → AI review modal | Manual | ✅ Gemini review rendered |
-| Validation tab → all employees listed | Manual | ✅ Paginated table rendered |
-| Second CSV upload clears previous state | Manual | ✅ No double-upload bug |
+| Upload valid CSV with all required columns | Manual | Pass |
+| Upload CSV with missing columns | Manual | Error displayed: lists missing columns |
+| Upload non-CSV file | Manual | Rejected with friendly message |
+| Rows with missing email, phone, or Employee ID | Manual | Flagged in Data Quality tab |
+| Employee ID not matching `E\d+` pattern | Manual | Format error raised |
+| Negative YoE value | Manual | Error surfaced; excluded from stats |
+| YoE > 50 | Manual | Out-of-range error raised |
+| Duplicate Employee IDs | Manual | Both occurrences flagged |
+| Employee card click → AI review modal | Manual | Gemini review rendered |
+| Validation tab → all employees listed | Manual | Paginated table rendered |
+| Second CSV upload clears previous state | Manual | No double-upload bug |
 
 ### 11.2 API Contract Validation
 
@@ -433,9 +391,9 @@ All three FastAPI endpoints were validated post-migration:
 
 | Endpoint | HTTP Method | Tested | Result |
 |----------|------------|--------|--------|
-| `/api/upload` | POST (multipart/form-data) | ✅ | 200 JSON response |
-| `/api/employee-review` | POST (JSON body) | ✅ | 200 JSON review |
-| `/api/validate-fields` | POST (JSON body) | ✅ | 200 JSON validations array |
+| `/api/upload` | POST (multipart/form-data) | | 200 JSON response |
+| `/api/employee-review` | POST (JSON body) | | 200 JSON review |
+| `/api/validate-fields` | POST (JSON body) | | 200 JSON validations array |
 
 ### 11.3 Regression Testing
 
@@ -451,14 +409,14 @@ Full regression test was performed post Sprint 3 Python migration:
 
 | KPI | Target | Achieved |
 |-----|--------|---------|
-| Validation rules implemented | ≥6 | ✅ 9 rule categories |
-| Designation skill matrices | ≥10 | ✅ 20 designations |
-| Course catalogue entries | ≥20 | ✅ 30+ entries |
-| AI features integrated | ≥2 | ✅ 3 (review, validation, overview) |
-| Backend migration completeness | 100% | ✅ 100% feature parity |
-| Frontend tabs delivered | 6 | ✅ 6 tabs |
-| Upload bugs resolved | 0 open | ✅ Double-upload fixed |
-| Sprint delivery | On schedule | ✅ All 3 sprints on time |
+| Validation rules implemented | ≥6 | 9 rule categories |
+| Designation skill matrices | ≥10 | 20 designations |
+| Course catalogue entries | ≥20 | 30+ entries |
+| AI features integrated | ≥2 | 3 (review, validation, overview) |
+| Backend migration completeness | 100% | 100% feature parity |
+| Frontend tabs delivered | 6 | 6 tabs |
+| Upload bugs resolved | 0 open | Double-upload fixed |
+| Sprint delivery | On schedule | All 3 sprints on time |
 
 ---
 
